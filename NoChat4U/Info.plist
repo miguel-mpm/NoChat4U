@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>SUPublicEDKey</key>
+	<string>IepMWsVBdeKCyax1ltB6/v26DFqBaabt6EwjZhSM8C4=</string>
+	<key>SUFeedURL</key>
+	<string>https://raw.githubusercontent.com/miguel-mpm/NoChat4U/refs/heads/main/appcast.xml</string>
+	<key>SUScheduledCheckInterval</key>
+	<string>28800</string>
+	<key>SUShowReleaseNotes</key>
+	<false/>
+	<key>CFBundleShortVersionString</key>
+	<string>#VERSION#</string>
+	<key>CFBundleVersion</key>
+	<string>#VERSION#</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.games</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleDisplayName</key>
+	<string>NoChat4U</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>NSHumanReadableCopyright</key>
+	<string></string>
+	<key>CFBundleGetInfoString</key>
+	<string></string>
+</dict>
+</plist>
