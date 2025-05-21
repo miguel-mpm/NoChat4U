@@ -2,12 +2,7 @@
 
 A lightweight macOS menubar app that lets you appear offline in League of Legends while keeping all game functionality. Perfect for those moments when you want to play without interruptions! Inspired by [Deceive](https://github.com/molenzwiebel/Deceive).
 
-
-![Screenshot 2025-05-21 at 11 00 25](https://github.com/user-attachments/assets/69c4b68a-33f3-4eaf-bb81-5ea8928a94c5)  ![Screenshot 2025-05-21 at 11 00 40](https://github.com/user-attachments/assets/5eacafc5-b11d-4f15-a7f1-bc9bee9e8e28)
-
-
-
-
+![Screenshot 2025-05-21 at 12 21 27](https://github.com/user-attachments/assets/b54de7f5-2975-4577-9e27-09b92eefba49) ![Screenshot 2025-05-21 at 12 21 38](https://github.com/user-attachments/assets/bbbd4775-28d0-4a2f-bac9-a72cb7f3a435)
 
 ## Installation
 
