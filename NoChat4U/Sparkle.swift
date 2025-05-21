@@ -4,7 +4,7 @@ import Sparkle
 
 @Observable
 class Sparkle: NSObject {
-    var automaticallyChecksForUpdates: Bool = false {
+    var automaticallyChecksForUpdates: Bool = true {
         didSet {
             guard automaticallyChecksForUpdates != oldValue else {
                 return
