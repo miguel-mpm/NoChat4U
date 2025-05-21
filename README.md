@@ -1,8 +1,12 @@
 # NoChat4U
+> ✅ [Notarized](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution) by Apple
 
-A lightweight macOS menubar app that lets you appear offline in League of Legends while keeping all game functionality. Perfect for those moments when you want to play without interruptions! Inspired by [Deceive](https://github.com/molenzwiebel/Deceive).
+A lightweight macOS menubar app that lets you appear offline in League of Legends while keeping all game functionality. Perfect for those moments when you want to play without interruptions! 
 
-![Screenshot 2025-05-21 at 12 21 27](https://github.com/user-attachments/assets/b54de7f5-2975-4577-9e27-09b92eefba49) ![Screenshot 2025-05-21 at 12 21 38](https://github.com/user-attachments/assets/bbbd4775-28d0-4a2f-bac9-a72cb7f3a435)
+Inspired by [Deceive](https://github.com/molenzwiebel/Deceive).
+
+
+![Screenshot 2025-05-21 at 12 21 27](https://github.com/user-attachments/assets/b54de7f5-2975-4577-9e27-09b92eefba49)
 
 ## Installation
 
@@ -28,6 +32,12 @@ brew install --cask miguel-mpm/tap/nochat4u
 2. Launch the Riot Client from the app by pressing "Play"
 3. Click to toggle between online/offline
 4. The icon color indicates your current status
+
+## Compatibility
+
+- macOS 14.6 (Sonoma) or newer
+- Intel and Apple Silicon (Universal)
+- League of Legends installed on your Mac
 
 ## Support
 
