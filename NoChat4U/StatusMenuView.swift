@@ -3,18 +3,19 @@ import LaunchAtLogin
 import SwiftUI
 import Sparkle
 import Combine
+import Vapor
 
-struct MenuDivider: View {
-    var body: some View {
+struct MenuDivider: SwiftUI.View {
+    var body: some SwiftUI.View {
         Divider()
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
     }
 }
 
-extension View {
+extension SwiftUI.View {
     @ViewBuilder
-    func hovered(_ isHovered: Binding<Bool>) -> some View {
+    func hovered(_ isHovered: Binding<Bool>) -> some SwiftUI.View {
         if #available(macOS 13.0, *) {
             self.onHover { hovering in
                 isHovered.wrappedValue = hovering
@@ -25,7 +26,7 @@ extension View {
     }
 }
 
-struct MenuItemButton: View {
+struct MenuItemButton: SwiftUI.View {
     let title: String
     let icon: String
     let action: () -> Void
@@ -44,7 +45,7 @@ struct MenuItemButton: View {
         self.action = action
     }
 
-    var body: some View {
+    var body: some SwiftUI.View {
         Button(action: action) {
             HStack {
                 HStack {
@@ -86,16 +87,71 @@ struct VisualEffect: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
-struct StatusMenuView: View {
+class FeedbackWindowController: NSWindowController {
+    private var feedbackViewModel: FeedbackViewModel?
+    
+    init(app: Application) {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 550),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        
+        super.init(window: window)
+        
+        self.feedbackViewModel = FeedbackViewModel(app: app)
+        
+        window.title = "Send Feedback - NoChat4U"
+        window.center()
+        window.setFrameAutosaveName("FeedbackWindow")
+        window.isReleasedWhenClosed = false
+        
+        // Set window level to appear above menu bar extras
+        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.popUpMenuWindow)) + 1)
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        
+        // Create the SwiftUI view
+        let feedbackView = FeedbackWindow(viewModel: feedbackViewModel!)
+        let hostingController = NSHostingController(rootView: feedbackView)
+        window.contentViewController = hostingController
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    func showWindow() {
+        guard let window = self.window else { return }
+        
+        // Ensure window appears above everything
+        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.popUpMenuWindow)) + 1)
+        
+        // Activate the app and show the window
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
+        
+        // Force focus after a tiny delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            window.makeKey()
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    }
+}
+
+struct StatusMenuView: SwiftUI.View {
     @ObservedObject var statusManager: StatusManager
-    @Environment(\.openWindow) private var openWindow
-    @Environment(Sparkle.self) var sparkle
+    @SwiftUI.Environment(\.openWindow) private var openWindow
+    @SwiftUI.Environment(Sparkle.self) var sparkle
+    
+    private static var feedbackWindowController: FeedbackWindowController?
         
     init(statusManager: StatusManager) {
         self.statusManager = statusManager
     }
 
-    var body: some View {
+    var body: some SwiftUI.View {
         @Bindable var sparkle = sparkle
         VStack(spacing: 0) {
             // Header
@@ -172,6 +228,15 @@ struct StatusMenuView: View {
 
             MenuDivider()
 
+            // Send Feedback
+            MenuItemButton(
+                title: "Send feedback",
+                icon: "envelope",
+                action: { openFeedbackWindow() }
+            )
+
+            MenuDivider()
+
             // Play button
             MenuItemButton(
                 title: getPlayButtonText(),
@@ -198,6 +263,16 @@ struct StatusMenuView: View {
             RoundedRectangle(cornerRadius: 6)
                 .stroke(Color.black.opacity(0.1), lineWidth: 0.5)
         )
+    }
+    
+    private func openFeedbackWindow() {
+        guard let app = statusManager.vaporApp else { return }
+        
+        if StatusMenuView.feedbackWindowController == nil {
+            StatusMenuView.feedbackWindowController = FeedbackWindowController(app: app)
+        }
+        
+        StatusMenuView.feedbackWindowController?.showWindow()
     }
     
     private func getPlayButtonText() -> String {

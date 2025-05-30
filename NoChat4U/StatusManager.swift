@@ -24,6 +24,12 @@ class StatusManager: ObservableObject {
     private var chatProxy: ChatProxy?
     private let logger = Logger(label: "NoChat4U.StatusManager")
     private var clientCheckTimer: Timer?
+    private var app: Application?
+    
+    // Public accessor for the Vapor app for feedback functionality
+    var vaporApp: Application? {
+        return app
+    }
         
     init() {
         // Load persisted status
@@ -35,27 +41,28 @@ class StatusManager: ObservableObject {
             var env = try Environment.detect()
             try LoggingSystem.bootstrap(from: &env)
 
-            let app = try await Application.make(env)
+            let vaporApp = try await Application.make(env)
+            self.app = vaporApp
 
-            app.http.server.configuration.port = 0 // Random port
-            app.http.server.configuration.hostname = "127.0.0.1"
-            app.http.server.configuration.backlog = 8
-            app.http.server.configuration.reuseAddress = true
+            vaporApp.http.server.configuration.port = 0 // Random port
+            vaporApp.http.server.configuration.hostname = "127.0.0.1"
+            vaporApp.http.server.configuration.backlog = 8
+            vaporApp.http.server.configuration.reuseAddress = true
 
             do {
-                try await route(app)
-                try await app.startup()
+                try await route(vaporApp)
+                try await vaporApp.startup()
                 
                 // Start chat proxy
                 chatProxy = try ChatProxy()
                 try chatProxy?.start()
             } catch {
-                app.logger.report(error: error)
-                try? await app.asyncShutdown()
+                vaporApp.logger.report(error: error)
+                try? await vaporApp.asyncShutdown()
                 throw error
             }
 
-            port = app.http.server.shared.localAddress?.port ?? 0
+            port = vaporApp.http.server.shared.localAddress?.port ?? 0
             
             // Start checking for Riot client
             startClientMonitoring()
@@ -65,6 +72,9 @@ class StatusManager: ObservableObject {
     deinit {
         clientCheckTimer?.invalidate()
         chatProxy?.stop()
+        Task {
+            try? await app?.asyncShutdown()
+        }
     }
     
     func startClientMonitoring() {

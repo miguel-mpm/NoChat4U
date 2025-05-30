@@ -29,6 +29,9 @@ env:
   # Sparkle update framework
   SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
   
+  # Feedback token
+  GITHUB_FEEDBACK_TOKEN: ${{ secrets.FEEDBACK_TOKEN }}
+  
   # Unique ID for this build to isolate resources
   BUILD_ID: ${{ github.run_id }}-${{ github.run_attempt }}
 
@@ -57,15 +60,15 @@ jobs:
 
       - name: Initialize Environment
         run: |
-          # Make cleanup script executable
+          # Make scripts executable
           chmod +x scripts/cleanup_environment.sh
           chmod +x scripts/setup_certificates.sh
           chmod +x scripts/notarize_and_staple.sh
           chmod +x scripts/update_homebrew.sh
           chmod +x scripts/update_appcast.sh
-          chmod +x scripts/update_version.sh
+          chmod +x scripts/prepare_build.sh
           
-          # Run cleanup again now that we have the script
+          # Run cleanup now that we have the script
           BUILD_ID=${{ env.BUILD_ID }} bash scripts/cleanup_environment.sh
           
           # Set up trap to ensure cleanup runs on failure
@@ -87,10 +90,14 @@ jobs:
           
           echo "Using isolated build environment with ID: ${{ env.BUILD_ID }}"
 
-      - name: Update Version in Info.plist
+      - name: Prepare Build Variables
         run: |
-          # Update version placeholders in Info.plist
-          bash scripts/update_version.sh "${{ steps.setup.outputs.version }}"
+          echo "🔧 Preparing build with version and token injection..."
+          
+          # Run unified script to inject both version and token
+          bash scripts/prepare_build.sh "${{ steps.setup.outputs.version }}" "${{ env.GITHUB_FEEDBACK_TOKEN }}"
+          
+          echo "✅ Build preparation completed for build ${{ env.BUILD_ID }}"
 
       - name: Build and Sign
         run: |
@@ -161,5 +168,5 @@ jobs:
       - name: Final Cleanup
         if: always()
         run: |
-          # Run cleanup script with build ID
+          # Run standard cleanup script with build ID
           BUILD_ID=${{ env.BUILD_ID }} bash scripts/cleanup_environment.sh
