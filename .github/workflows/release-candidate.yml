@@ -77,13 +77,12 @@ jobs:
           # Extract version info for RC tags
           TAG_NAME=${GITHUB_REF#refs/tags/}
           
-          # Handle RC versioning - extract base version if available
-          if [[ $TAG_NAME =~ ^v?([0-9]+\.[0-9]+\.[0-9]+).*rc.*$ ]]; then
-            VERSION=${BASH_REMATCH[1]}-rc
-          elif [[ $TAG_NAME =~ rc ]]; then
-            # If no semantic version found, use the whole tag as version
-            VERSION=${TAG_NAME#v}
+          # Handle RC versioning - preserve the full RC identifier
+          if [[ $TAG_NAME =~ ^v?([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
+            # Extract version including RC suffix (e.g., "1.2.3-rc1")
+            VERSION=${BASH_REMATCH[1]}
           else
+            # If no semantic version found, use the whole tag as version
             VERSION=${TAG_NAME#v}
           fi
           
