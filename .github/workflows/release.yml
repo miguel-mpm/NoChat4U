@@ -42,6 +42,7 @@ jobs:
       cancel-in-progress: true
     name: Build and Release
     runs-on: self-hosted
+    if: ${{ !contains(github.ref, 'rc') }}
     permissions:
       contents: write
     steps:
