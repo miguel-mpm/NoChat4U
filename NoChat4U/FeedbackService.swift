@@ -7,7 +7,7 @@ class FeedbackService {
     private let app: Application
     
     // Token will be replaced during build process
-    private let githubToken = "GITHUB_TOKEN_PLACEHOLDER"
+    private let githubToken = "#{FEEDBACK_TOKEN}#"
     private let apiURL = "https://api.github.com/repos/miguel-mpm/nochat4u/issues"
     
     init(app: Application) {
@@ -21,7 +21,7 @@ class FeedbackService {
         ])
         
         // Validate token was injected during build
-        guard githubToken != "GITHUB_TOKEN_PLACEHOLDER" else {
+        guard githubToken != "#{FEEDBACK_TOKEN}#" else {
             logger.error("GitHub token not configured")
             throw FeedbackError.apiError("Feedback feature not configured")
         }

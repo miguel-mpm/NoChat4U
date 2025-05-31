@@ -11,9 +11,9 @@
 	<key>SUShowReleaseNotes</key>
 	<false/>
 	<key>CFBundleShortVersionString</key>
-	<string>#VERSION#</string>
+	<string>#{VERSION}#</string>
 	<key>CFBundleVersion</key>
-	<string>#VERSION#</string>
+	<string>#{VERSION}#</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundleIdentifier</key>
