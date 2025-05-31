@@ -12,11 +12,6 @@ struct FeedbackWindow: View {
                         .font(.title2)
                         .fontWeight(.bold)
                     Spacer()
-                    Button("Cancel") {
-                        viewModel.dismiss()
-                        closeWindow()
-                    }
-                    .buttonStyle(.bordered)
                 }
                 
                 Text("Help us improve NoChat4U by sharing your feedback, bug reports, or feature requests.")
@@ -120,12 +115,17 @@ struct FeedbackWindow: View {
                 }
                 .frame(minHeight: 150)
             }
-            
-            Spacer(minLength: 20)
+
+            Spacer()
             
             // Submit Button
             HStack {
                 Spacer()
+                Button("Cancel") {
+                    viewModel.dismiss()
+                    closeWindow()
+                }
+                .buttonStyle(.bordered)
                 Button(viewModel.submitButtonText) {
                     viewModel.submitFeedback()
                 }

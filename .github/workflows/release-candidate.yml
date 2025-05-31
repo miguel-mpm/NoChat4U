@@ -1,0 +1,169 @@
+name: Release Candidate
+
+on:
+  push:
+    tags:
+      - "*rc*"
+
+env:
+  # App settings
+  APP_NAME: NoChat4U
+  
+  # Build paths
+  XCODE_BUILD_PATH: DerivedData/Build/Products/Release
+  
+  # Signing secrets
+  BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+  P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+  BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
+  KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+  
+  # Apple notarization
+  APPLE_ID: ${{ secrets.APPLE_ID }}
+  APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+  APPLE_TEAM_ID: ${{ secrets.DEVELOPER_TEAM_ID }}
+  
+  # Sparkle update framework
+  SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+  
+  # Feedback token
+  GITHUB_FEEDBACK_TOKEN: ${{ secrets.FEEDBACK_TOKEN }}
+  
+  # Unique ID for this build to isolate resources
+  BUILD_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+
+jobs:
+  release-candidate:
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+    name: Build and Release Candidate
+    runs-on: self-hosted
+    permissions:
+      contents: write
+    steps:
+
+      - name: Pre-Job Cleanup
+        run: |
+          # Run cleanup script if it exists from a previous checkout
+          if [ -f "scripts/cleanup_environment.sh" ]; then
+            BUILD_ID=${{ env.BUILD_ID }} bash scripts/cleanup_environment.sh
+          else
+            echo "Cleanup script not found, will run after checkout"
+          fi
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Initialize Environment
+        run: |
+          # Make scripts executable
+          chmod +x scripts/cleanup_environment.sh
+          chmod +x scripts/setup_certificates.sh
+          chmod +x scripts/notarize_and_staple.sh
+          chmod +x scripts/update_appcast.sh
+          chmod +x scripts/prepare_build.sh
+          
+          # Run cleanup now that we have the script
+          BUILD_ID=${{ env.BUILD_ID }} bash scripts/cleanup_environment.sh
+          
+          # Set up trap to ensure cleanup runs on failure
+          # This trap will be inherited by all subsequent steps
+          trap "BUILD_ID=${{ env.BUILD_ID }} bash $GITHUB_WORKSPACE/scripts/cleanup_environment.sh" EXIT
+
+      - name: Setup Environment
+        id: setup
+        run: |
+          # Extract version info for RC tags
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          
+          # Handle RC versioning - extract base version if available
+          if [[ $TAG_NAME =~ ^v?([0-9]+\.[0-9]+\.[0-9]+).*rc.*$ ]]; then
+            VERSION=${BASH_REMATCH[1]}-rc
+          elif [[ $TAG_NAME =~ rc ]]; then
+            # If no semantic version found, use the whole tag as version
+            VERSION=${TAG_NAME#v}
+          else
+            VERSION=${TAG_NAME#v}
+          fi
+          
+          ZIP_NAME=$APP_NAME-$TAG_NAME.zip
+          
+          # Output for other steps
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "zip_name=$ZIP_NAME" >> $GITHUB_OUTPUT
+          
+          echo "Using isolated build environment with ID: ${{ env.BUILD_ID }}"
+          echo "Building release candidate: $TAG_NAME (version: $VERSION)"
+
+      - name: Prepare Build Variables
+        run: |
+          echo "🔧 Preparing RC build with version and token injection..."
+          
+          # Run unified script to inject both version and token
+          bash scripts/prepare_build.sh "${{ steps.setup.outputs.version }}" "${{ env.GITHUB_FEEDBACK_TOKEN }}"
+          
+          echo "✅ RC build preparation completed for build ${{ env.BUILD_ID }}"
+
+      - name: Build and Sign
+        run: |
+          # Setup certificates with isolation
+          BUILD_ID=${{ env.BUILD_ID }} bash scripts/setup_certificates.sh
+          
+          # Build and export the app
+          xcodebuild archive \
+            -scheme Release \
+            -derivedDataPath DerivedData-${{ env.BUILD_ID }} \
+            ARCHS="arm64 x86_64" \
+            ONLY_ACTIVE_ARCH=NO \
+            -sdk macosx \
+            -archivePath DerivedData-${{ env.BUILD_ID }}/archives/${{ env.APP_NAME }}-${{ steps.setup.outputs.tag_name }}.xcarchive
+
+          # Export the archive to a .app
+          xcodebuild -exportArchive \
+            -archivePath DerivedData-${{ env.BUILD_ID }}/archives/${{ env.APP_NAME }}-${{ steps.setup.outputs.tag_name }}.xcarchive \
+            -exportPath DerivedData-${{ env.BUILD_ID }}/archives \
+            -exportOptionsPlist NoChat4U/ExportOptions.plist
+          
+          # Verify build output
+          ls -la "DerivedData-${{ env.BUILD_ID }}/archives/$APP_NAME.app/Contents/MacOS/$APP_NAME"
+
+      - name: Notarize and Package
+        id: package
+        run: |
+          # Set build path using unique ID
+          export XCODE_BUILD_PATH="DerivedData-${{ env.BUILD_ID }}/archives"
+          
+          # Notarize, staple and package the app
+          BUILD_ID=${{ env.BUILD_ID }} bash scripts/notarize_and_staple.sh "$APP_NAME" "${{ steps.setup.outputs.tag_name }}"
+          
+          # Move package to workspace root for upload
+          mv "$XCODE_BUILD_PATH/${{ steps.setup.outputs.zip_name }}" .
+          
+          # Calculate SHA for reference (not used for Homebrew in RC)
+          SHA256=$(shasum -a 256 "${{ steps.setup.outputs.zip_name }}" | cut -d ' ' -f 1)
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Pre-Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.setup.outputs.tag_name }}
+          name: Release Candidate ${{ steps.setup.outputs.tag_name }}
+          files: ${{ steps.setup.outputs.zip_name }}
+          prerelease: true
+          body: |
+            🚀 **Release Candidate Build**
+            
+            This is a pre-release version for testing purposes.
+            
+            **Version:** ${{ steps.setup.outputs.version }}
+            **Build ID:** ${{ env.BUILD_ID }}
+            
+            ⚠️ **Note:** This is a release candidate and may contain bugs. Use at your own risk.
+
+      - name: Final Cleanup
+        if: always()
+        run: |
+          # Run standard cleanup script with build ID
+          BUILD_ID=${{ env.BUILD_ID }} bash scripts/cleanup_environment.sh 
