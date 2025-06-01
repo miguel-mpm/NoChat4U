@@ -21,7 +21,7 @@ class FeedbackService {
         ])
         
         // Validate token was injected during build
-        guard githubToken != "#{FEEDBACK_TOKEN}#" else {
+        guard githubToken.contains("FEEDBACK_TOKEN") else {
             logger.error("GitHub token not configured")
             throw FeedbackError.apiError("Feedback feature not configured")
         }
