@@ -340,6 +340,20 @@ private func modifyPresenceXML(_ xml: String, targetStatus: String) -> String {
         let fullRange = lolStartRange.lowerBound..<lolEndRange.upperBound
         modifiedXml.removeSubrange(fullRange)
     }
+
+    // Remove the keystone element if present
+    if let keystoneStartRange = modifiedXml.range(of: "<keystone>"),
+       let keystoneEndRange = modifiedXml.range(of: "</keystone>") {
+        let fullRange = keystoneStartRange.lowerBound..<keystoneEndRange.upperBound
+        modifiedXml.removeSubrange(fullRange)
+    }
+    
+    // Remove the riot_client element if present
+    if let riotClientStartRange = modifiedXml.range(of: "<riot_client>"),
+       let riotClientEndRange = modifiedXml.range(of: "</riot_client>") {
+        let fullRange = riotClientStartRange.lowerBound..<riotClientEndRange.upperBound
+        modifiedXml.removeSubrange(fullRange)
+    }
     
     // Replace the show tag content with "offline"
     if let showStartRange = modifiedXml.range(of: "<show>"),
