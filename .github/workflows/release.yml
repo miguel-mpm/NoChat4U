@@ -67,7 +67,6 @@ jobs:
           chmod +x scripts/notarize_and_staple.sh
           chmod +x scripts/update_homebrew.sh
           chmod +x scripts/update_appcast.sh
-          chmod +x scripts/prepare_build.sh
           
           # Run cleanup now that we have the script
           BUILD_ID=${{ env.BUILD_ID }} bash scripts/cleanup_environment.sh
@@ -91,14 +90,12 @@ jobs:
           
           echo "Using isolated build environment with ID: ${{ env.BUILD_ID }}"
 
-      - name: Prepare Build Variables
-        run: |
-          echo "🔧 Preparing build with version and token injection..."
-          
-          # Run unified script to inject both version and token
-          bash scripts/prepare_build.sh "${{ steps.setup.outputs.version }}" "${{ env.GITHUB_FEEDBACK_TOKEN }}"
-          
-          echo "✅ Build preparation completed for build ${{ env.BUILD_ID }}"
+      - uses: cschleiden/replace-tokens@v1
+        with:
+          files: '["**/*.swift", "**/*.plist"]'
+        env:
+          FEEDBACK_TOKEN: ${{ env.GITHUB_FEEDBACK_TOKEN }}
+          VERSION: ${{ steps.setup.outputs.version }}
 
       - name: Build and Sign
         run: |
