@@ -38,6 +38,7 @@ jobs:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
     name: Build and Release Candidate
+    runs-on: self-hosted
     permissions:
       contents: write
     steps:
