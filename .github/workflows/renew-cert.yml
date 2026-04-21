@@ -34,6 +34,7 @@ jobs:
           certbot certonly \
             --dns-ovh \
             --dns-ovh-credentials /tmp/certbot-ovh.ini \
+            --dns-ovh-propagation-seconds 120 \
             --non-interactive \
             --agree-tos \
             --email "${{ secrets.CERTBOT_EMAIL }}" \
