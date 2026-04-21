@@ -14,35 +14,11 @@ class ChatProxy {
     private var connections = [ObjectIdentifier: ProxiedConnection]()
     private let serverSSLContext: NIOSSLContext
  
-    init() throws {
-        // Generate self-signed certificate and key
-        let certPath = NSTemporaryDirectory() + "cert.pem"
-        let keyPath = NSTemporaryDirectory() + "key.pem"
-        
-        // Check if the certificate and key already exist
-        if !FileManager.default.fileExists(atPath: certPath) || !FileManager.default.fileExists(atPath: keyPath) {
-            // Generate the certificate and key using OpenSSL
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/openssl")
-            process.arguments = ["req", "-x509", "-newkey", "rsa:2048", "-keyout", keyPath, "-out", certPath, "-days", "365", "-nodes", "-subj", "/CN=NoChat4U"]
-            
-            try process.run()
-            process.waitUntilExit()
-            
-            guard process.terminationStatus == 0 else {
-                logger.error("Failed to generate certificate: OpenSSL error \(process.terminationStatus)")
-                throw NIOSSLError.failedToLoadCertificate
-            }
-        }
-        
-        // Load the PEM files
-        let certData = try Data(contentsOf: URL(fileURLWithPath: certPath))
-        let keyData = try Data(contentsOf: URL(fileURLWithPath: keyPath))
-        
-        // Create server SSL context
+    init(certificate: NIOSSLCertificate, privateKey: NIOSSLPrivateKey) throws {
+        // Create server SSL context using the provided certificate
         var serverConfig = TLSConfiguration.makeServerConfiguration(
-            certificateChain: [.certificate(try NIOSSLCertificate(bytes: [UInt8](certData), format: .pem))],
-            privateKey: .privateKey(try NIOSSLPrivateKey(bytes: [UInt8](keyData), format: .pem))
+            certificateChain: [.certificate(certificate)],
+            privateKey: .privateKey(privateKey)
         )
         serverConfig.certificateVerification = .none
         serverConfig.trustRoots = .default

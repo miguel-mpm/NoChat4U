@@ -1,0 +1,56 @@
+name: Renew TLS Certificate
+
+on:
+  schedule:
+    - cron: '0 8 1 * *'  # 8am UTC on the 1st of every month
+  workflow_dispatch:       # allow manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  renew-cert:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install certbot and OVH DNS plugin
+        run: pip install certbot certbot-dns-ovh
+
+      - name: Create OVH credentials file
+        env:
+          OVH_ENDPOINT: ${{ secrets.OVH_ENDPOINT }}
+          OVH_APPLICATION_KEY: ${{ secrets.OVH_APPLICATION_KEY }}
+          OVH_APPLICATION_SECRET: ${{ secrets.OVH_APPLICATION_SECRET }}
+          OVH_CONSUMER_KEY: ${{ secrets.OVH_CONSUMER_KEY }}
+        run: |
+          printf "dns_ovh_endpoint = %s\ndns_ovh_application_key = %s\ndns_ovh_application_secret = %s\ndns_ovh_consumer_key = %s\n" \
+            "$OVH_ENDPOINT" "$OVH_APPLICATION_KEY" "$OVH_APPLICATION_SECRET" "$OVH_CONSUMER_KEY" \
+            > /tmp/certbot-ovh.ini
+          chmod 600 /tmp/certbot-ovh.ini
+
+      - name: Issue certificate
+        run: |
+          certbot certonly \
+            --dns-ovh \
+            --dns-ovh-credentials /tmp/certbot-ovh.ini \
+            --non-interactive \
+            --agree-tos \
+            --email "${{ secrets.CERTBOT_EMAIL }}" \
+            -d config.riftmate.lol \
+            --config-dir /tmp/letsencrypt \
+            --work-dir /tmp/letsencrypt-work \
+            --logs-dir /tmp/letsencrypt-logs
+
+      - name: Copy new certificate files
+        run: |
+          cp /tmp/letsencrypt/live/config.riftmate.lol/fullchain.pem certs/fullchain.pem
+          cp /tmp/letsencrypt/live/config.riftmate.lol/privkey.pem certs/privkey.pem
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add certs/fullchain.pem certs/privkey.pem
+          git diff --staged --quiet || git commit -m "chore: renew TLS certificate"
+          git push

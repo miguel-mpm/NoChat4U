@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Vapor
+import AppKit
 import Logging
 
 @MainActor
@@ -52,14 +53,22 @@ class StatusManager: ObservableObject {
             do {
                 try await route(vaporApp)
                 try await vaporApp.startup()
-                
+
+                // Fetch the TLS certificate for the MITM proxy
+                let (cert, key) = try await CertificateManager.fetchCertificate()
+
                 // Start chat proxy
-                chatProxy = try ChatProxy()
+                chatProxy = try ChatProxy(certificate: cert, privateKey: key)
                 try chatProxy?.start()
             } catch {
                 vaporApp.logger.report(error: error)
                 try? await vaporApp.asyncShutdown()
-                throw error
+
+                let alert = NSAlert()
+                alert.messageText = "NoChat4U failed to start"
+                alert.informativeText = error.localizedDescription
+                alert.alertStyle = .critical
+                alert.runModal()
             }
 
             port = vaporApp.http.server.shared.localAddress?.port ?? 0

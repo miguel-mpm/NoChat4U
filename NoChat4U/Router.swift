@@ -73,15 +73,14 @@ private func handleConfigRequest(request: Request, app: Application) async throw
 
     // Replace "chat.host" and "chat.port" in the original config response
     var modifiedJsonObject = jsonObject
-    modifiedJsonObject["chat.host"] = "127.0.0.1"
+    modifiedJsonObject["chat.host"] = "config.riftmate.lol"
     modifiedJsonObject["chat.port"] = SharedState.shared.chatProxyPort ?? app.http.server.shared.localAddress?.port
-    modifiedJsonObject["chat.allow_bad_cert.enabled"] = true
     
     // Create a new affinities object with all regions pointing to localhost
     var newAffinities: [String: String] = [:]
     if let originalAffinities = chatAffinities {
         for (region, _) in originalAffinities {
-            newAffinities[region] = "127.0.0.1"
+            newAffinities[region] = "config.riftmate.lol"
         }
     }
     modifiedJsonObject["chat.affinities"] = newAffinities
