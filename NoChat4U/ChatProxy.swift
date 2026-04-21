@@ -14,10 +14,10 @@ class ChatProxy {
     private var connections = [ObjectIdentifier: ProxiedConnection]()
     private let serverSSLContext: NIOSSLContext
  
-    init(certificate: NIOSSLCertificate, privateKey: NIOSSLPrivateKey) throws {
-        // Create server SSL context using the provided certificate
+    init(certificateChain: [NIOSSLCertificate], privateKey: NIOSSLPrivateKey) throws {
+        // Create server SSL context using the provided certificate chain (leaf + intermediates)
         var serverConfig = TLSConfiguration.makeServerConfiguration(
-            certificateChain: [.certificate(certificate)],
+            certificateChain: certificateChain.map { .certificate($0) },
             privateKey: .privateKey(privateKey)
         )
         serverConfig.certificateVerification = .none

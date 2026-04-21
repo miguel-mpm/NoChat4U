@@ -55,10 +55,10 @@ class StatusManager: ObservableObject {
                 try await vaporApp.startup()
 
                 // Fetch the TLS certificate for the MITM proxy
-                let (cert, key) = try await CertificateManager.fetchCertificate()
+                let (chain, key) = try await CertificateManager.fetchCertificate()
 
                 // Start chat proxy
-                chatProxy = try ChatProxy(certificate: cert, privateKey: key)
+                chatProxy = try ChatProxy(certificateChain: chain, privateKey: key)
                 try chatProxy?.start()
             } catch {
                 vaporApp.logger.report(error: error)
