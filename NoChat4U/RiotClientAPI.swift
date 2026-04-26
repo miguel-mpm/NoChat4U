@@ -44,34 +44,35 @@ enum RiotClientAPI {
 
     // MARK: - Public API
 
-    /// Updates the availability status the League client displays to the user.
+    /// Updates the chat state the League client displays to the user.
     ///
-    /// - Parameter availability: One of `"chat"`, `"offline"`, `"away"`, `"dnd"`.
+    /// - Parameter state: One of the `ChatAccountState` enum values.
     ///   Currently only `"chat"` and `"offline"` are used by NoChat4U.
-    static func updateAvailability(_ availability: String) {
+    ///   Accepts: `"chat"`, `"offline"`, `"away"`, `"mobile"`, `"dnd"`.
+    static func updateState(_ state: String) {
         guard let lockfile = findLockfile() else {
             logger.debug("No Riot Client lockfile found; skipping client-side status sync")
             return
         }
         logger.info(
-            "Syncing client-side status",
-            metadata: ["availability": .string(availability), "port": .string("\(lockfile.port)")]
+            "Syncing client-side chat state",
+            metadata: ["state": .string(state), "port": .string("\(lockfile.port)")]
         )
 
         Task {
-            await putAvailability(availability, lockfile: lockfile, attempt: 1)
+            await putState(state, lockfile: lockfile, attempt: 1)
         }
     }
 
     /// Best-effort call with retry. Fires a Task so callers never block.
-    static func updateAvailability(_ availability: String, afterDelay seconds: Double) {
+    static func updateState(_ state: String, afterDelay seconds: Double) {
         Task {
             try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
             guard let lockfile = findLockfile() else {
                 logger.debug("No lockfile after delay; giving up")
                 return
             }
-            await putAvailability(availability, lockfile: lockfile, attempt: 1)
+            await putState(state, lockfile: lockfile, attempt: 1)
         }
     }
 
@@ -91,8 +92,8 @@ enum RiotClientAPI {
         return nil
     }
 
-    private static func putAvailability(
-        _ availability: String,
+    private static func putState(
+        _ state: String,
         lockfile: Lockfile,
         attempt: Int
     ) async {
@@ -113,7 +114,9 @@ enum RiotClientAPI {
         let authData = Data(authString.utf8).base64EncodedString()
         request.setValue("Basic \(authData)", forHTTPHeaderField: "Authorization")
 
-        let body = ["availability": availability]
+        // ChatChatGamePresence schema (all fields optional).
+        // Only `state` is needed to change the chat presence dot.
+        let body: [String: String] = ["state": state]
         request.httpBody = try? JSONEncoder().encode(body)
 
         // Self-signed certificate — accept any server trust.
@@ -132,7 +135,7 @@ enum RiotClientAPI {
             )
 
             if httpResponse?.statusCode == 200 || httpResponse?.statusCode == 204 {
-                logger.info("Client-side status synced to \(availability)")
+                logger.info("Client-side chat state synced to \(state)")
             } else if let body = String(data: data, encoding: .utf8) {
                 logger.debug("Response body: \(body)")
             }
@@ -142,7 +145,7 @@ enum RiotClientAPI {
                 "PUT /chat/v3/me failed (attempt \(attempt)): \(error.localizedDescription). Retrying in \(delay)s"
             )
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            await putAvailability(availability, lockfile: lockfile, attempt: attempt + 1)
+            await putState(state, lockfile: lockfile, attempt: attempt + 1)
         }
     }
 }

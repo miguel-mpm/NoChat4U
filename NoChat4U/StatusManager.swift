@@ -10,15 +10,15 @@ class StatusManager: ObservableObject {
     var port: Int = 0
     @Published var isOffline: Bool = false {
         didSet {
-            let availability = isOffline ? "offline" : "chat"
-            SharedState.shared.setTargetStatus(availability)
-            logger.info("Status changed", metadata: ["status": .string(availability)])
+            let state = isOffline ? "offline" : "chat"
+            SharedState.shared.setTargetStatus(state)
+            logger.info("Status changed", metadata: ["status": .string(state)])
             
             NotificationCenter.default.post(name: Notification.Name("StatusChanged"), object: nil)
             
             // Sync the visual status in the League client UI so it matches
             // what other users see via the proxy (issue #3).
-            RiotClientAPI.updateAvailability(availability)
+            RiotClientAPI.updateState(state)
         }
     }
     
@@ -114,7 +114,7 @@ class StatusManager: ObservableObject {
             // offline, re-sync the client-side status so it does not show
             // "Online" after startup. Delay to let the local API initialize.
             if !wasRunning && status.isRunning && isOffline {
-                RiotClientAPI.updateAvailability("offline", afterDelay: 4.0)
+                RiotClientAPI.updateState("offline", afterDelay: 4.0)
             }
             
             logger.info(
