@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -eou pipefail
+set -euo pipefail
 
 # Setup code signing certificates for macOS app - isolated from development environment
 #

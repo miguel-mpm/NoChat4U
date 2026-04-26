@@ -10,3 +10,4 @@ DerivedData/
 /docs/
 /logs/
 /tasks/
+certs/*.pem
