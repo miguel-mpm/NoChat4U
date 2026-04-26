@@ -94,7 +94,6 @@ jobs:
         with:
           files: '["**/*.swift", "**/*.plist"]'
         env:
-          FEEDBACK_TOKEN: ${{ env.GITHUB_FEEDBACK_TOKEN }}
           VERSION: ${{ steps.setup.outputs.version }}
 
       - name: Build and Sign

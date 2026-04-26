@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -eou pipefail
+set -euo pipefail
 
 # Cleanup script for NoChat4U build environment
 # Safely cleans up only workflow-created resources without affecting development environment

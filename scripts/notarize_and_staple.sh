@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -eou pipefail
+set -euo pipefail
 
 # Notarize and staple macOS application
 #
