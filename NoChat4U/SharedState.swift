@@ -1,45 +1,51 @@
 import Foundation
+import os
 
-class SharedState {
+final class SharedState {
     static let shared = SharedState()
     
-    private(set) var originalChatHost: String?
-    private(set) var originalChatPort: Int?
-    private(set) var chatProxyPort: Int?
-    private(set) var lastPresenceXML: String?
+    private let lock = OSAllocatedUnfairLock()
+    
+    private var _originalChatHost: String?
+    private var _originalChatPort: Int?
+    private var _chatProxyPort: Int?
+    private var _lastPresenceXML: String?
+    
+    var originalChatHost: String? { lock.withLock { _originalChatHost } }
+    var originalChatPort: Int?    { lock.withLock { _originalChatPort } }
+    var chatProxyPort: Int?       { lock.withLock { _chatProxyPort } }
+    var lastPresenceXML: String?  { lock.withLock { _lastPresenceXML } }
     
     private init() {}
     
     func setOriginalChatServer(host: String, port: Int) {
-        self.originalChatHost = host
-        self.originalChatPort = port
+        lock.withLock {
+            _originalChatHost = host
+            _originalChatPort = port
+        }
     }
     
     func setChatProxyPort(_ port: Int) {
-        self.chatProxyPort = port
+        lock.withLock { _chatProxyPort = port }
     }
     
     var targetStatus: String {
-        get {
-            return PersistentStorage.shared.targetStatus
-        }
+        get { PersistentStorage.shared.targetStatus }
         set {
-            guard newValue == "chat" || newValue == "offline" else {
-                return
-            }
+            guard newValue == "chat" || newValue == "offline" else { return }
             PersistentStorage.shared.targetStatus = newValue
         }
     }
     
     func setTargetStatus(_ status: String) {
-        self.targetStatus = status
+        targetStatus = status
     }
     
     func storeLastPresence(_ xml: String) {
-        self.lastPresenceXML = xml
+        lock.withLock { _lastPresenceXML = xml }
     }
     
     func getLastPresence() -> String? {
-        return lastPresenceXML
+        lock.withLock { _lastPresenceXML }
     }
-} 
+}
