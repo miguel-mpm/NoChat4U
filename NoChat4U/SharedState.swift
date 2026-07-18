@@ -7,6 +7,8 @@ class SharedState {
     private(set) var originalChatPort: Int?
     private(set) var chatProxyPort: Int?
     private(set) var lastPresenceXML: String?
+    private(set) var fakeFriendLocalPart: String?
+    private(set) var fakeFriendDomain: String? = "eu1.pvp.net"
     
     private init() {}
     
@@ -17,6 +19,11 @@ class SharedState {
     
     func setChatProxyPort(_ port: Int) {
         self.chatProxyPort = port
+    }
+
+    func setFakeFriend(localPart: String, domain: String) {
+        self.fakeFriendLocalPart = localPart
+        self.fakeFriendDomain = domain
     }
     
     var targetStatus: String {
@@ -42,4 +49,4 @@ class SharedState {
     func getLastPresence() -> String? {
         return lastPresenceXML
     }
-} 
+}
