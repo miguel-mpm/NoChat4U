@@ -44,6 +44,7 @@ class ChatProxy {
     
     @objc private func statusChanged() {
         sendUpdatedPresence()
+        refreshFakeFriendPresence()
     }
     
     private func sendUpdatedPresence() {
@@ -76,6 +77,19 @@ class ChatProxy {
                     serverChannel.writeAndFlush(presenceBuffer, promise: nil)
                 }
         
+    }
+
+    private func refreshFakeFriendPresence() {
+        guard let connection = connections.values.first else {
+            return
+        }
+
+        logger.info("Status changed, refreshing fake friend presence")
+        connection.sendFakeFriendPresence().flatMap {
+            connection.sendFakeFriendStatusMessage()
+        }.whenFailure { error in
+            logger.error("Failed to refresh fake friend status: \(error)")
+        }
     }
     
     func start() throws {
@@ -213,6 +227,8 @@ class ProxiedConnection {
     var serverChannel: Channel?
     private let eventLoop: EventLoop
     private var xmlBufferToServer = ""
+    private var insertedFakeFriend = false
+    private var sentFakePresence = false
     
     init(clientChannel: Channel, eventLoop: EventLoop) {
         self.clientChannel = clientChannel
@@ -234,6 +250,26 @@ class ProxiedConnection {
         // Get the string data if possible
         let string = data.getString(at: data.readerIndex, length: data.readableBytes) ?? ""
             logger.debug("Client data: \(string)")
+
+            // Deceive waits for the client to react to the completed roster before
+            // sending the fake presence. Sending it from the server read path can
+            // interleave it with a roster split across multiple network reads.
+            if data.readableBytes > 0,
+               insertedFakeFriend,
+               !sentFakePresence {
+                sentFakePresence = true
+                return sendFakeFriendPresence().flatMap {
+                    self.sendFakeFriendStatusMessage()
+                }.flatMap {
+                    self.processClientData(data)
+                }
+            }
+
+            if let fakeLocal = SharedState.shared.fakeFriendLocalPart,
+               string.contains("\(fakeLocal)@") {
+                logger.debug("Dropping client data addressed to the fake friend")
+                return eventLoop.makeSucceededFuture(())
+            }
             
             // Append to our buffer
             xmlBufferToServer += string
@@ -292,12 +328,158 @@ class ProxiedConnection {
                     }.flatMap { $0 }
     }
     
-    /// Forward data from server to client (no modifications needed)
+    /// Forward data from server to client, injecting the local status indicator if needed
     func forwardToClient(_ data: ByteBuffer) -> EventLoopFuture<Void> {
+        if !eventLoop.inEventLoop {
+            return eventLoop.submit {
+                self.forwardToClient(data)
+            }.flatMap { $0 }
+        }
+
+        let string = data.getString(at: data.readerIndex, length: data.readableBytes) ?? ""
+        let rosterMarker = "<query xmlns='jabber:iq:riotgames:roster'>"
+        var bufferToClient = data
+
+        if !insertedFakeFriend,
+           let markerRange = string.range(of: rosterMarker) {
+            insertedFakeFriend = true
+
+            let domain = extractDomain(from: string)
+                ?? SharedState.shared.fakeFriendDomain
+                ?? "eu1.pvp.net"
+            let localPart = SharedState.shared.fakeFriendLocalPart
+                ?? UUID().uuidString.lowercased()
+            SharedState.shared.setFakeFriend(localPart: localPart, domain: domain)
+
+            var modifiedRoster = string
+            modifiedRoster.insert(
+                contentsOf: fakeFriendRosterItem(local: localPart, domain: domain),
+                at: markerRange.upperBound
+            )
+
+            bufferToClient = ByteBuffer()
+            bufferToClient.writeString(modifiedRoster)
+            logger.info("Injected NoChat4U into the client roster")
+        }
+
         return clientChannel.eventLoop.submit {
-                self.clientChannel.writeAndFlush(data)
+                self.clientChannel.writeAndFlush(bufferToClient)
             }.flatMap { $0 }
     }
+
+    /// Send the fake friend's current status to the Riot client only
+    func sendFakeFriendPresence() -> EventLoopFuture<Void> {
+        if !eventLoop.inEventLoop {
+            return eventLoop.submit {
+                self.sendFakeFriendPresence()
+            }.flatMap { $0 }
+        }
+
+        guard insertedFakeFriend,
+              sentFakePresence,
+              let localPart = SharedState.shared.fakeFriendLocalPart,
+              let domain = SharedState.shared.fakeFriendDomain else {
+            return eventLoop.makeSucceededFuture(())
+        }
+
+        let presenceXML = fakeFriendPresenceXML(
+            local: localPart,
+            domain: domain,
+            targetStatus: SharedState.shared.targetStatus
+        )
+        var presenceBuffer = ByteBuffer()
+        presenceBuffer.writeString(presenceXML)
+
+        return clientChannel.eventLoop.submit {
+                self.clientChannel.writeAndFlush(presenceBuffer)
+            }.flatMap { $0 }
+    }
+
+    /// Confirm the active mode in chat, matching Deceive's fake-player feedback
+    func sendFakeFriendStatusMessage() -> EventLoopFuture<Void> {
+        if !eventLoop.inEventLoop {
+            return eventLoop.submit {
+                self.sendFakeFriendStatusMessage()
+            }.flatMap { $0 }
+        }
+
+        guard insertedFakeFriend,
+              sentFakePresence,
+              let localPart = SharedState.shared.fakeFriendLocalPart,
+              let domain = SharedState.shared.fakeFriendDomain else {
+            return eventLoop.makeSucceededFuture(())
+        }
+
+        let messageXML = fakeFriendStatusMessageXML(
+            local: localPart,
+            domain: domain,
+            targetStatus: SharedState.shared.targetStatus
+        )
+        var messageBuffer = ByteBuffer()
+        messageBuffer.writeString(messageXML)
+
+        return clientChannel.eventLoop.submit {
+                self.clientChannel.writeAndFlush(messageBuffer)
+            }.flatMap { $0 }
+    }
+}
+
+private func extractDomain(from roster: String) -> String? {
+    guard let jidMarkerRange = roster.range(of: "jid='") else {
+        return nil
+    }
+
+    let jid = roster[jidMarkerRange.upperBound...]
+    guard let atIndex = jid.firstIndex(of: "@") else {
+        return nil
+    }
+
+    let domainStart = jid.index(after: atIndex)
+    let domain = jid[domainStart...]
+    let domainEnd = domain.firstIndex(where: { $0 == "'" || $0 == "/" })
+        ?? roster.endIndex
+    let value = String(roster[domainStart..<domainEnd])
+
+    return value.isEmpty ? nil : value
+}
+
+private func fakeFriendRosterItem(local: String, domain: String) -> String {
+    return "<item jid='\(local)@\(domain)' name='NoChat4U' subscription='both' puuid='\(local)'><group priority='9999'>NoChat4U</group><state>online</state><id name='NoChat4U' tagline='...'/><lol name='NoChat4U'/><platforms><riot name='NoChat4U' tagline='...'/></platforms></item>"
+}
+
+private func fakeFriendPresenceXML(
+    local: String,
+    domain: String,
+    targetStatus: String
+) -> String {
+    let modeText = fakeFriendModeText(targetStatus: targetStatus)
+    let timestamp = Int64(Date().timeIntervalSince1970 * 1_000)
+    let presenceID = "nc-\(UUID().uuidString.lowercased())"
+
+    return "<presence from='\(local)@\(domain)/RC-NoChat4U' id='\(presenceID)'><games><keystone><st>chat</st><s.t>\(timestamp)</s.t><s.p>keystone</s.p><pty/></keystone><league_of_legends><st>chat</st><s.t>\(timestamp)</s.t><s.p>league_of_legends</s.p><s.c>live</s.c><p>{&quot;pty&quot;:true}</p></league_of_legends></games><show>chat</show><platform>riot</platform><status>NoChat4U — \(modeText)</status></presence>"
+}
+
+private func fakeFriendStatusMessageXML(
+    local: String,
+    domain: String,
+    targetStatus: String
+) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.timeZone = TimeZone(secondsFromGMT: 0)
+    formatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+
+    let stamp = formatter.string(from: Date().addingTimeInterval(1))
+    let messageID = "nc-status-\(UUID().uuidString.lowercased())"
+    let modeText = fakeFriendModeText(targetStatus: targetStatus)
+
+    return "<message from='\(local)@\(domain)/RC-NoChat4U' stamp='\(stamp)' id='\(messageID)' type='chat'><body>NoChat4U — \(modeText)</body></message>"
+}
+
+private func fakeFriendModeText(targetStatus: String) -> String {
+    return targetStatus == "offline"
+        ? "🔴 Hidden (offline)"
+        : "🟢 Visible (online)"
 }
 
 /// Modifies presence XML to change the status if needed
@@ -429,4 +611,4 @@ final class ServerToClientHandler: ChannelInboundHandler {
         logger.debug("Server disconnected, closing client connection")
         connection.clientChannel.close(promise: nil)
     }
-} 
+}
