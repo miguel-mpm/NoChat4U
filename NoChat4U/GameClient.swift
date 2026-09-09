@@ -28,7 +28,7 @@ public struct ClientStatus {
     let launchedByApp: Bool
 }
 
-public func isRiotClientRunning() -> ClientStatus {
+public func isRiotClientRunning() async -> ClientStatus {
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
     process.arguments = ["-f", "RiotClientServices"]
@@ -38,13 +38,17 @@ public func isRiotClientRunning() -> ClientStatus {
     
     do {
         try process.run()
-        process.waitUntilExit()
+        
+        await withCheckedContinuation { continuation in
+            process.terminationHandler = { _ in
+                continuation.resume()
+            }
+        }
         
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         
         let isRunning = !output.isEmpty
-        
         return ClientStatus(isRunning: isRunning, launchedByApp: clientLaunchedByApp)
     } catch {
         print("Error checking if Riot Client is running: \(error)")
@@ -65,9 +69,7 @@ public func launchLeagueClient(proxyHost: String, proxyPort: UInt16) throws {
     
     try process.run()
     
-    // Mark that we've launched the client
     clientLaunchedByApp = true
-    // Store the PID of the launched process
     launchedClientPID = process.processIdentifier
 }
 
@@ -77,7 +79,7 @@ public func resetClientLaunchedFlag() {
 }
 
 // Terminate the launched client process
-public func terminateLeagueClient() {
+public func terminateLeagueClient() async {
     if clientLaunchedByApp, let pid = launchedClientPID {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/kill")
@@ -85,7 +87,11 @@ public func terminateLeagueClient() {
 
         do {
             try process.run()
-            process.waitUntilExit()
+            await withCheckedContinuation { continuation in
+                process.terminationHandler = { _ in
+                    continuation.resume()
+                }
+            }
             print("Attempted to terminate client process with PID \(pid)")
         } catch {
             print("Error attempting to terminate client process \(pid): \(error)")
@@ -99,4 +105,4 @@ public func terminateLeagueClient() {
 
 enum LeagueClientError: Error {
     case installFileNotFound
-} 
+}

@@ -3,8 +3,9 @@ import AppKit
 
 public class AppDelegate: NSObject, NSApplicationDelegate {
     public func applicationWillTerminate(_ notification: Notification) {
-        // Terminate the Riot Client when the app closes
-        terminateLeagueClient()
+        Task {
+            await terminateLeagueClient()
+        }
     }
 }
 

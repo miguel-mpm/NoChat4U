@@ -10,12 +10,15 @@ class StatusManager: ObservableObject {
     var port: Int = 0
     @Published var isOffline: Bool = false {
         didSet {
-            // Update SharedState when isOffline changes
-            SharedState.shared.setTargetStatus(isOffline ? "offline" : "chat")
-            logger.info("Status changed", metadata: ["status": .string(isOffline ? "offline" : "chat")])
+            let state = isOffline ? "offline" : "chat"
+            SharedState.shared.setTargetStatus(state)
+            logger.info("Status changed", metadata: ["status": .string(state)])
             
-            // Post notification to trigger presence update
             NotificationCenter.default.post(name: Notification.Name("StatusChanged"), object: nil)
+            
+            // Sync the visual status in the League client UI so it matches
+            // what other users see via the proxy (issue #3).
+            RiotClientAPI.updateState(state)
         }
     }
     
@@ -27,25 +30,24 @@ class StatusManager: ObservableObject {
     private var clientCheckTimer: Timer?
     private var app: Application?
     
-    // Public accessor for the Vapor app for feedback functionality
     var vaporApp: Application? {
         return app
     }
         
     init() {
-        // Load persisted status
         let persistedStatus = SharedState.shared.targetStatus
         isOffline = persistedStatus == "offline"
         logger.info("Loaded persisted status", metadata: ["status": .string(persistedStatus)])
         
-        Task {
+        Task { [weak self] in
+            guard let self = self else { return }
             var env = try Environment.detect()
             try LoggingSystem.bootstrap(from: &env)
 
             let vaporApp = try await Application.make(env)
             self.app = vaporApp
 
-            vaporApp.http.server.configuration.port = 0 // Random port
+            vaporApp.http.server.configuration.port = 0
             vaporApp.http.server.configuration.hostname = "127.0.0.1"
             vaporApp.http.server.configuration.backlog = 8
             vaporApp.http.server.configuration.reuseAddress = true
@@ -54,12 +56,11 @@ class StatusManager: ObservableObject {
                 try await route(vaporApp)
                 try await vaporApp.startup()
 
-                // Fetch the TLS certificate for the MITM proxy
                 let (chain, key) = try await CertificateManager.fetchCertificate()
 
-                // Start chat proxy
-                chatProxy = try ChatProxy(certificateChain: chain, privateKey: key)
-                try chatProxy?.start()
+                let proxy = try ChatProxy(certificateChain: chain, privateKey: key)
+                self.chatProxy = proxy
+                try proxy.start()
             } catch {
                 vaporApp.logger.report(error: error)
                 try? await vaporApp.asyncShutdown()
@@ -71,10 +72,8 @@ class StatusManager: ObservableObject {
                 alert.runModal()
             }
 
-            port = vaporApp.http.server.shared.localAddress?.port ?? 0
-            
-            // Start checking for Riot client
-            startClientMonitoring()
+            self.port = vaporApp.http.server.shared.localAddress?.port ?? 0
+            self.startClientMonitoring()
         }
     }
     
@@ -87,12 +86,10 @@ class StatusManager: ObservableObject {
     }
     
     func startClientMonitoring() {
-        // Check initially
         Task { @MainActor in
             await checkClientStatus()
         }
         
-        // Check every 2 seconds
         clientCheckTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 await self?.checkClientStatus()
@@ -101,21 +98,29 @@ class StatusManager: ObservableObject {
     }
     
     private func checkClientStatus() async {
-        let status = isRiotClientRunning()
+        let status = await isRiotClientRunning()
         
-        // If client was running and is now not running, reset the launchedByApp flag
         if isClientRunning && !status.isRunning {
             resetClientLaunchedFlag()
         }
+        
+        let wasRunning = isClientRunning
         
         if status.isRunning != isClientRunning || status.launchedByApp != isClientLaunchedByApp {
             isClientRunning = status.isRunning
             isClientLaunchedByApp = status.launchedByApp
             
+            // When the Riot Client comes online while NoChat4U is set to
+            // offline, re-sync the client-side status so it does not show
+            // "Online" after startup. Delay to let the local API initialize.
+            if !wasRunning && status.isRunning && isOffline {
+                RiotClientAPI.updateState("offline", afterDelay: 4.0)
+            }
+            
             logger.info(
-                "Riot client status changed", 
+                "Riot client status changed",
                 metadata: [
-                    "running": .string(status.isRunning ? "yes" : "no"), 
+                    "running": .string(status.isRunning ? "yes" : "no"),
                     "launchedByApp": .string(status.launchedByApp ? "yes" : "no")
                 ]
             )
@@ -127,9 +132,7 @@ class StatusManager: ObservableObject {
             let configPort = port
             try launchLeagueClient(proxyHost: "127.0.0.1", proxyPort: UInt16(configPort))
             
-            // Immediately check client status after launch attempt
             Task { @MainActor in
-                // Give it a moment to start
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 await checkClientStatus()
             }
@@ -137,4 +140,4 @@ class StatusManager: ObservableObject {
             self.logger.error("Failed to launch League client: \(error)")
         }
     }
-} 
+}
