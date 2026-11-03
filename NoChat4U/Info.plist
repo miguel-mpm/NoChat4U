@@ -7,7 +7,7 @@
 	<key>SUFeedURL</key>
 	<string>https://raw.githubusercontent.com/miguel-mpm/NoChat4U/refs/heads/main/appcast.xml</string>
 	<key>SUScheduledCheckInterval</key>
-	<string>28800</string>
+	<integer>28800</integer>
 	<key>SUShowReleaseNotes</key>
 	<false/>
 	<key>CFBundleShortVersionString</key>

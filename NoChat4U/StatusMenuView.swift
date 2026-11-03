@@ -192,6 +192,14 @@ struct StatusMenuView: SwiftUI.View {
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
 
+            if statusManager.chatTLSFailed {
+                Text("Can't verify Riot's chat server. Chat is unavailable.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 4)
+            }
+
             // Launch at Login
             HStack {
                 HStack {
